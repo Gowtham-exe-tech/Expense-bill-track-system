@@ -2,16 +2,15 @@ from django.db import models
 from bills.models import Bill
 
 ROLE_CHOICES = [
-    ('Accounts', 'Accounts'),
-    ('Manager', 'Manager'),
-    ('MD', 'MD'),
+    ('ACCOUNTANT', 'ACCOUNTANT'),
+    ('MANAGER', 'MANAGER'),
+    ('CEO', 'CEO'),
 ]
 
 STATUS_CHOICES = [
     ('Pending', 'Pending'),
     ('Approved', 'Approved'),
     ('Rejected', 'Rejected'),
-    ('Under Review', 'Under Review'),
 ]
 
 class Approval(models.Model):

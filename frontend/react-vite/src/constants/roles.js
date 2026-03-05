@@ -1,0 +1,16 @@
+export const ROLES = {
+    RECEPTIONIST: 'RECEPTIONIST',
+    ACCOUNTANT: 'ACCOUNTANT',
+    MANAGER: 'MANAGER',
+    CEO: 'CEO',
+};
+
+export const STATUS_FLOW = [
+    'UPLOADED',
+    'ACCOUNTANT_VERIFIED',
+    'MANAGER_APPROVED',
+    'MANAGER_REJECTED',
+    'CEO_APPROVED',
+    'CEO_REJECTED',
+    'PAID',
+];

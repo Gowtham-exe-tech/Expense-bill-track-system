@@ -1,88 +1,75 @@
-import React, { useState, useEffect } from 'react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
+import { useEffect, useState } from 'react';
+import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Title, Tooltip } from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
 import api from '../services/api';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 const Analytics = () => {
     const [data, setData] = useState(null);
+    const [error, setError] = useState('');
 
     useEffect(() => {
+        const fetchAnalytics = async () => {
+            try {
+                const response = await api.get('analytics/');
+                setData(response.data);
+            } catch (err) {
+                setError(err.response?.data?.error || 'Unable to load analytics.');
+            }
+        };
         fetchAnalytics();
     }, []);
 
-    const fetchAnalytics = async () => {
-        try {
-            const response = await api.get('analytics/');
-            setData(response.data);
-        } catch (error) {
-            console.error('Error fetching analytics:', error);
-        }
-    };
-
-    if (!data) return <div style={{ padding: '2rem' }}>Loading analytics...</div>;
-
-    const categoryLabels = data.expenses_by_category.map(c => c.category);
-    const categoryValues = data.expenses_by_category.map(c => c.total);
+    if (error) return <div className="alert alert-error">{error}</div>;
+    if (!data) return <div className="page-subtitle">Loading analytics...</div>;
 
     const pieData = {
-        labels: categoryLabels,
-        datasets: [
-            {
-                data: categoryValues,
-                backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'],
-                borderWidth: 1,
-            },
-        ],
+        labels: data.expenses_by_category.map((item) => item.category),
+        datasets: [{ data: data.expenses_by_category.map((item) => item.total), backgroundColor: ['#0f766e', '#f59e0b', '#ef4444', '#2563eb', '#9333ea', '#6b7280'] }],
     };
 
     const barData = {
         labels: ['Approved', 'Pending', 'Rejected'],
         datasets: [
             {
-                label: 'Number of Bills',
-                data: [
-                    data.approval_statistics.approved,
-                    data.approval_statistics.pending,
-                    data.approval_statistics.rejected
-                ],
-                backgroundColor: ['#10B981', '#F59E0B', '#EF4444'],
+                label: 'Bills',
+                data: [data.approval_statistics.approved, data.approval_statistics.pending, data.approval_statistics.rejected],
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
             },
         ],
     };
 
     return (
         <div className="fade-in">
-            <h1 className="page-title">Analytics Dashboard</h1>
-            <p className="page-subtitle">AI-driven insights and spending overview.</p>
+            <h2 className="page-title">Analytics</h2>
+            <p className="page-subtitle">CEO dashboard overview.</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-                <div className="card" style={{ borderLeft: '4px solid var(--primary)' }}>
+            <div className="stats-grid">
+                <div className="card">
                     <p className="text-muted">Total Expenses</p>
-                    <h2 style={{ fontSize: '2rem', marginTop: '0.5rem' }}>₹{data.total_expenses || 0}</h2>
+                    <h3>Rs {data.total_expenses || 0}</h3>
                 </div>
-                <div className="card" style={{ borderLeft: '4px solid var(--secondary)' }}>
+                <div className="card">
                     <p className="text-muted">Approved Bills</p>
-                    <h2 style={{ fontSize: '2rem', marginTop: '0.5rem' }}>{data.approval_statistics.approved}</h2>
+                    <h3>{data.approval_statistics.approved}</h3>
                 </div>
-                <div className="card" style={{ borderLeft: '4px solid var(--warning)' }}>
+                <div className="card">
                     <p className="text-muted">Pending Bills</p>
-                    <h2 style={{ fontSize: '2rem', marginTop: '0.5rem' }}>{data.approval_statistics.pending}</h2>
+                    <h3>{data.approval_statistics.pending}</h3>
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div className="charts-grid">
                 <div className="card">
-                    <h3 style={{ marginBottom: '1rem' }}>Expenses by Category</h3>
-                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
+                    <h3 style={{ marginBottom: '0.8rem' }}>Expenses by Category</h3>
+                    <div className="chart-box">
                         <Pie data={pieData} options={{ maintainAspectRatio: false }} />
                     </div>
                 </div>
-
                 <div className="card">
-                    <h3 style={{ marginBottom: '1rem' }}>Approval Workflow Stats</h3>
-                    <div style={{ height: '300px' }}>
+                    <h3 style={{ marginBottom: '0.8rem' }}>Approval Summary</h3>
+                    <div className="chart-box">
                         <Bar data={barData} options={{ maintainAspectRatio: false }} />
                     </div>
                 </div>

@@ -2,7 +2,6 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
-    max-width: 1200px;
 }
 
 .drag-drop-zone {
@@ -112,6 +111,12 @@
     border: 1px solid #6EE7B7;
 }
 
+.alert-info {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #93c5fd;
+}
+
 .alert-error {
     background-color: #FEE2E2;
     color: #991B1B;
@@ -120,6 +125,22 @@
 
 @media (max-width: 900px) {
     .upload-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.full-width {
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    .two-col {
         grid-template-columns: 1fr;
     }
 }

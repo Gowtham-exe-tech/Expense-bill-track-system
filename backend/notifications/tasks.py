@@ -8,7 +8,7 @@ def check_due_dates_and_notify():
     
     overdue_bills = Bill.objects.filter(
         bill_due_date__lt=today,
-        status__in=['Pending', 'Under Review'] # Might not want to alert if it's already Approved/Rejected
+        status__in=['UPLOADED', 'ACCOUNTANT_VERIFIED', 'MANAGER_APPROVED']
     )
     
     for bill in overdue_bills:

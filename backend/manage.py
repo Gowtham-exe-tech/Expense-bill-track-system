@@ -2,7 +2,6 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-sys.path.insert(0, r"c:\Users\DEEPAK\Desktop\WEB DEVELOPMENT - LEARNING\JS learning\bill-system\backend")
 
 def main():
     """Run administrative tasks."""

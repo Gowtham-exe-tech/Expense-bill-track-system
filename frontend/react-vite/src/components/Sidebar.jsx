@@ -1,35 +1,46 @@
-import React from 'react';
 import { NavLink } from 'react-router-dom';
-import '../styles/layout.css';
+import { useAuth } from '../context/AuthContext';
+import { ROLES } from '../constants/roles';
+
+const NAV_BY_ROLE = {
+    [ROLES.RECEPTIONIST]: [
+        { to: '/upload', label: 'Upload Bill' },
+        { to: '/bills', label: 'Uploaded Bills' },
+    ],
+    [ROLES.ACCOUNTANT]: [
+        { to: '/bills', label: 'Verify Bills' },
+    ],
+    [ROLES.MANAGER]: [
+        { to: '/bills', label: 'Approve Bills' },
+    ],
+    [ROLES.CEO]: [
+        { to: '/analytics', label: 'Analytics' },
+        { to: '/assistant', label: 'AI Assistant' },
+        { to: '/audit-logs', label: 'Audit Logs' },
+        { to: '/bills', label: 'All Bills' },
+    ],
+};
 
 const Sidebar = () => {
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <div style={{ width: 30, height: 30, background: 'var(--primary)', borderRadius: '8px' }}></div>
-        ExpenseAI
-      </div>
-      
-      <nav className="sidebar-nav">
-        <NavLink to="/" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-          <span>Dashboard</span>
-        </NavLink>
-        <NavLink to="/upload" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-          <span>Upload Bill</span>
-        </NavLink>
-        <NavLink to="/bills" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-          <span>Bill List</span>
-        </NavLink>
-        <NavLink to="/analytics" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-          <span>Analytics</span>
-        </NavLink>
-      </nav>
-      
-      <div style={{ padding: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Logged in as <b>Admin</b></p>
-      </div>
-    </aside>
-  );
+    const { user } = useAuth();
+    const navItems = NAV_BY_ROLE[user?.role] || [];
+
+    return (
+        <aside className="sidebar">
+            <div className="sidebar-brand">ExpenseAI</div>
+            <nav className="sidebar-nav">
+                {navItems.map((item) => (
+                    <NavLink
+                        key={item.to}
+                        to={item.to}
+                        className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+                    >
+                        {item.label}
+                    </NavLink>
+                ))}
+            </nav>
+        </aside>
+    );
 };
 
 export default Sidebar;
