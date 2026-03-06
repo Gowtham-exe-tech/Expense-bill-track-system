@@ -3,19 +3,30 @@ import api from '../services/api';
 
 const AiAssistant = () => {
     const [prompt, setPrompt] = useState('');
-    const [answer, setAnswer] = useState('');
+    const [messages, setMessages] = useState([]);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     const onSubmit = async (event) => {
         event.preventDefault();
+        if (!prompt.trim()) return;
+        const userMessage = { role: 'user', text: prompt };
+        setMessages((prev) => [...prev, userMessage]);
         setError('');
         setLoading(true);
+
         try {
             const response = await api.post('analytics/assistant/', { prompt });
-            setAnswer(response.data.response);
+            setMessages((prev) => [
+                ...prev,
+                {
+                    role: 'assistant',
+                    text: response.data.response,
+                },
+            ]);
+            setPrompt('');
         } catch (err) {
-            setError(err.response?.data?.error || 'Assistant request failed.');
+            setError(err.response?.data?.error || 'Chatbot request failed.');
         } finally {
             setLoading(false);
         }
@@ -23,31 +34,38 @@ const AiAssistant = () => {
 
     return (
         <div className="fade-in">
-            <h2 className="page-title">AI Assistant</h2>
-            <p className="page-subtitle">Ask questions about bill processing trends.</p>
-            <form className="card" onSubmit={onSubmit}>
+            <h2 className="page-title">AI Chatbot</h2>
+            <p className="page-subtitle">Context-aware financial assistant for approvals, audits, and bill analytics.</p>
+
+            <div className="card glass chat-box">
+                {messages.length === 0 ? (
+                    <p className="text-muted">Ask: pending bills, under review, top vendors, monthly spend, overdue bills.</p>
+                ) : (
+                    messages.map((message, index) => (
+                        <div key={index} className={`chat-message ${message.role}`}>
+                            <p>{message.text}</p>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <form className="card glass" onSubmit={onSubmit} style={{ marginTop: '1rem' }}>
                 <div className="form-group">
-                    <label>Question</label>
+                    <label>Ask chatbot</label>
                     <textarea
                         className="form-control"
-                        rows={4}
+                        rows={3}
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Example: Summarize risk in pending approvals."
+                        placeholder="Example: Show bills awaiting my approval"
                     />
                 </div>
                 <button type="submit" className="btn btn-primary" disabled={loading}>
-                    {loading ? 'Thinking...' : 'Ask'}
+                    {loading ? 'Thinking...' : 'Send'}
                 </button>
             </form>
 
             {error ? <div className="alert alert-error">{error}</div> : null}
-            {answer ? (
-                <div className="card" style={{ marginTop: '1rem' }}>
-                    <h3 style={{ marginBottom: '0.5rem' }}>Response</h3>
-                    <p>{answer}</p>
-                </div>
-            ) : null}
         </div>
     );
 };

@@ -76,7 +76,7 @@ const UploadBill = () => {
         try {
             setStatusType('info');
             setStatusMsg('Uploading and processing...');
-            await api.post('bills/upload/', data, {
+            const uploadResponse = await api.post('bills/upload/', data, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
                     const total = progressEvent.total || 1;
@@ -84,6 +84,14 @@ const UploadBill = () => {
                     setUploadProgress(percent);
                 },
             });
+            const extracted = uploadResponse.data?.ocr_extracted_data || {};
+            setFormData((prev) => ({
+                ...prev,
+                vendor_name: extracted.vendor_name || prev.vendor_name,
+                amount: extracted.amount || prev.amount,
+                bill_date: extracted.bill_date || prev.bill_date,
+                category: extracted.category && extracted.category !== 'Other' ? extracted.category : prev.category,
+            }));
             setStatusType('success');
             setStatusMsg('Bill uploaded successfully. OCR and AI categorization completed.');
             setUploadProgress(100);

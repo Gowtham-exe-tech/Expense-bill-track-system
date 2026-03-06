@@ -13,35 +13,39 @@ const BillDetail = () => {
     const [form, setForm] = useState({ vendor_name: '', amount: '', category: '', bill_date: '', bill_due_date: '' });
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        const fetchBill = async () => {
-            const response = await api.get(`bills/${id}/`);
-            setBill(response.data);
-            setForm({
-                vendor_name: response.data.vendor_name || '',
-                amount: response.data.amount || '',
-                category: response.data.category || 'Other',
-                bill_date: response.data.bill_date || '',
-                bill_due_date: response.data.bill_due_date || '',
-            });
-        };
-        fetchBill().catch(() => setError('Failed to load bill details.'));
-    }, [id]);
-
-    const canAccountantVerify = user?.role === ROLES.ACCOUNTANT && bill?.status === 'UPLOADED';
-    const canManagerAct = user?.role === ROLES.MANAGER && bill?.status === 'ACCOUNTANT_VERIFIED';
-    const canCeoAct = user?.role === ROLES.CEO && bill?.status === 'MANAGER_APPROVED';
-    const canMarkPaid = (user?.role === ROLES.ACCOUNTANT || user?.role === ROLES.CEO) && bill?.status === 'CEO_APPROVED';
-
-    const currentApproval = useMemo(
-        () => bill?.approvals?.find((approval) => approval.status === 'Pending'),
-        [bill]
-    );
-
     const refresh = async () => {
         const response = await api.get(`bills/${id}/`);
         setBill(response.data);
+        setForm({
+            vendor_name: response.data.vendor_name || '',
+            amount: response.data.amount || '',
+            category: response.data.category || 'Other',
+            bill_date: response.data.bill_date || '',
+            bill_due_date: response.data.bill_due_date || '',
+        });
     };
+
+    useEffect(() => {
+        refresh().catch(() => setError('Failed to load bill details.'));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]);
+
+    const myApproval = useMemo(() => bill?.approvals?.find((item) => item.approver_role === user?.role), [bill, user?.role]);
+    const canAccountantVerify = user?.role === ROLES.ACCOUNTANT && bill?.status === 'UPLOADED';
+    const canMarkPaid = (user?.role === ROLES.ACCOUNTANT || user?.role === ROLES.CEO) && bill?.status === 'APPROVED';
+    const isFinalState = ['PAID', 'APPROVED', 'REJECTED'].includes(bill?.status);
+
+    const canApprove = Boolean(
+        myApproval &&
+        (myApproval.is_required || myApproval.status === 'Rejected') &&
+        !isFinalState
+    );
+    const canReject = Boolean(
+        user?.role &&
+        [ROLES.ACCOUNTANT, ROLES.MANAGER, ROLES.CEO].includes(user.role) &&
+        (user.role === ROLES.MANAGER || user.role === ROLES.CEO || myApproval?.is_required || myApproval?.status === 'Approved') &&
+        !isFinalState
+    );
 
     const submitVerification = async () => {
         try {
@@ -55,14 +59,14 @@ const BillDetail = () => {
     const handleAction = async (action) => {
         try {
             if (action === 'approve') {
-                await api.post(`bills/${id}/approve/`);
+                await api.post(`bills/${id}/approve/`, { comments: comment });
             } else if (action === 'reject') {
                 await api.post(`bills/${id}/reject/`, { comments: comment });
             } else if (action === 'paid') {
                 await api.post(`bills/${id}/mark-paid/`);
             }
-            await refresh();
             setComment('');
+            await refresh();
         } catch (err) {
             setError(err.response?.data?.error || 'Action failed.');
         }
@@ -83,54 +87,27 @@ const BillDetail = () => {
             {error ? <div className="alert alert-error">{error}</div> : null}
 
             <div className="detail-grid">
-                <div className="card">
+                <div className="card glass">
                     <h3 style={{ marginBottom: '1rem' }}>Bill Information</h3>
                     <div className="form-group">
                         <label>Vendor Name</label>
-                        <input
-                            className="form-control"
-                            value={form.vendor_name}
-                            disabled={!canAccountantVerify}
-                            onChange={(e) => setForm((prev) => ({ ...prev, vendor_name: e.target.value }))}
-                        />
+                        <input className="form-control" value={form.vendor_name} disabled={!canAccountantVerify} onChange={(e) => setForm((prev) => ({ ...prev, vendor_name: e.target.value }))} />
                     </div>
                     <div className="form-group">
                         <label>Amount</label>
-                        <input
-                            className="form-control"
-                            value={form.amount}
-                            disabled={!canAccountantVerify}
-                            onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                        />
+                        <input className="form-control" value={form.amount} disabled={!canAccountantVerify} onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))} />
                     </div>
                     <div className="form-group">
                         <label>Category</label>
-                        <input
-                            className="form-control"
-                            value={form.category}
-                            disabled={!canAccountantVerify}
-                            onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-                        />
+                        <input className="form-control" value={form.category} disabled={!canAccountantVerify} onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))} />
                     </div>
                     <div className="form-group">
                         <label>Bill Date</label>
-                        <input
-                            type="date"
-                            className="form-control"
-                            value={form.bill_date}
-                            disabled={!canAccountantVerify}
-                            onChange={(e) => setForm((prev) => ({ ...prev, bill_date: e.target.value }))}
-                        />
+                        <input type="date" className="form-control" value={form.bill_date} disabled={!canAccountantVerify} onChange={(e) => setForm((prev) => ({ ...prev, bill_date: e.target.value }))} />
                     </div>
                     <div className="form-group">
                         <label>Due Date</label>
-                        <input
-                            type="date"
-                            className="form-control"
-                            value={form.bill_due_date}
-                            disabled={!canAccountantVerify}
-                            onChange={(e) => setForm((prev) => ({ ...prev, bill_due_date: e.target.value }))}
-                        />
+                        <input type="date" className="form-control" value={form.bill_due_date} disabled={!canAccountantVerify} onChange={(e) => setForm((prev) => ({ ...prev, bill_due_date: e.target.value }))} />
                     </div>
                     <p className="page-subtitle">Current Status: {bill.status}</p>
                     {canAccountantVerify ? (
@@ -140,24 +117,24 @@ const BillDetail = () => {
                     ) : null}
                 </div>
 
-                <div className="card">
+                <div className="card glass">
                     <h3 style={{ marginBottom: '1rem' }}>Workflow Actions</h3>
-                    <p className="page-subtitle">Pending Approval: {currentApproval?.approver_role || 'None'}</p>
-                    {canManagerAct || canCeoAct ? (
+                    <p className="page-subtitle">Your approval state: {myApproval?.status || 'N/A'}</p>
+                    {(canApprove || canReject) ? (
                         <div className="action-stack">
-                            <button className="btn btn-primary" type="button" onClick={() => handleAction('approve')}>
-                                Approve
-                            </button>
-                            <textarea
-                                className="form-control"
-                                rows={3}
-                                placeholder="Rejection reason"
-                                value={comment}
-                                onChange={(e) => setComment(e.target.value)}
-                            />
-                            <button className="btn btn-danger" type="button" onClick={() => handleAction('reject')}>
-                                Reject
-                            </button>
+                            {canApprove ? (
+                                <button className="btn btn-primary" type="button" onClick={() => handleAction('approve')}>
+                                    Approve
+                                </button>
+                            ) : null}
+                            {canReject ? (
+                                <>
+                                    <textarea className="form-control" rows={3} placeholder="Rejection/decision comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+                                    <button className="btn btn-danger" type="button" onClick={() => handleAction('reject')}>
+                                        Reject
+                                    </button>
+                                </>
+                            ) : null}
                         </div>
                     ) : null}
                     {canMarkPaid ? (
@@ -165,18 +142,18 @@ const BillDetail = () => {
                             Mark as Paid
                         </button>
                     ) : null}
-                    {!canAccountantVerify && !canManagerAct && !canCeoAct && !canMarkPaid ? (
+                    {!canAccountantVerify && !canApprove && !canReject && !canMarkPaid ? (
                         <p className="text-muted">No actions available for your role at this status.</p>
                     ) : null}
                 </div>
             </div>
 
-            <div className="card" style={{ marginTop: '1.2rem' }}>
+            <div className="card glass" style={{ marginTop: '1.2rem' }}>
                 <h3 style={{ marginBottom: '0.5rem' }}>OCR Extracted Data</h3>
                 <pre className="code-block">{JSON.stringify(bill.ocr_extracted_data || {}, null, 2)}</pre>
             </div>
 
-            <div className="card" style={{ marginTop: '1.2rem' }}>
+            <div className="card glass" style={{ marginTop: '1.2rem' }}>
                 <h3 style={{ marginBottom: '0.8rem' }}>Audit Trail</h3>
                 {bill.audit_trails?.map((audit) => (
                     <div key={audit.audit_id} className="audit-row">

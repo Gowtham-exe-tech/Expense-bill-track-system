@@ -9,13 +9,15 @@ const NAV_BY_ROLE = {
     ],
     [ROLES.ACCOUNTANT]: [
         { to: '/bills', label: 'Verify Bills' },
+        { to: '/assistant', label: 'AI Chatbot' },
     ],
     [ROLES.MANAGER]: [
         { to: '/bills', label: 'Approve Bills' },
+        { to: '/assistant', label: 'AI Chatbot' },
     ],
     [ROLES.CEO]: [
         { to: '/analytics', label: 'Analytics' },
-        { to: '/assistant', label: 'AI Assistant' },
+        { to: '/assistant', label: 'AI Chatbot' },
         { to: '/audit-logs', label: 'Audit Logs' },
         { to: '/bills', label: 'All Bills' },
     ],

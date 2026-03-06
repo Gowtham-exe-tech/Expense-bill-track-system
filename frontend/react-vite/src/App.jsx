@@ -71,7 +71,7 @@ function App() {
                     <Route
                         path="assistant"
                         element={
-                            <ProtectedRoute allowedRoles={[ROLES.CEO]}>
+                            <ProtectedRoute allowedRoles={[ROLES.ACCOUNTANT, ROLES.MANAGER, ROLES.CEO]}>
                                 <AiAssistant />
                             </ProtectedRoute>
                         }

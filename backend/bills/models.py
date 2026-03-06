@@ -8,6 +8,9 @@ STATUS_CHOICES = [
     ('MANAGER_REJECTED', 'MANAGER_REJECTED'),
     ('CEO_APPROVED', 'CEO_APPROVED'),
     ('CEO_REJECTED', 'CEO_REJECTED'),
+    ('UNDER_REVIEW', 'UNDER_REVIEW'),
+    ('APPROVED', 'APPROVED'),
+    ('REJECTED', 'REJECTED'),
     ('PAID', 'PAID'),
 ]
 
@@ -37,6 +40,7 @@ class Bill(models.Model):
     )
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='UPLOADED')
     ocr_extracted_data = models.JSONField(default=dict, blank=True)
+    overdue_notified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

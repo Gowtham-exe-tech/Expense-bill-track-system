@@ -11,10 +11,11 @@
     position: fixed;
     left: 0;
     top: 0;
-    background: var(--sidebar);
+    background: linear-gradient(160deg, rgba(11, 23, 51, 0.95), rgba(24, 32, 68, 0.9));
     color: #d1d5db;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
     z-index: 30;
+    backdrop-filter: blur(10px);
 }
 
 .sidebar-brand {
@@ -39,6 +40,7 @@
     border-radius: 10px;
     color: #cbd5e1;
     font-weight: 500;
+    transition: var(--transition);
 }
 
 .nav-item:hover {
@@ -46,7 +48,7 @@
 }
 
 .nav-item.active {
-    background: rgba(15, 118, 110, 0.35);
+    background: linear-gradient(120deg, rgba(38, 71, 166, 0.5), rgba(123, 91, 219, 0.45));
     color: #fff;
 }
 
@@ -64,8 +66,8 @@
     top: 0;
     left: 240px;
     right: 0;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(4px);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;

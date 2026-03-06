@@ -12,5 +12,8 @@ export const STATUS_FLOW = [
     'MANAGER_REJECTED',
     'CEO_APPROVED',
     'CEO_REJECTED',
+    'UNDER_REVIEW',
+    'APPROVED',
+    'REJECTED',
     'PAID',
 ];

@@ -5,10 +5,21 @@ from rest_framework.views import APIView
 
 from bills.models import Bill
 
+from .chatbot import answer_chat_query
+
 
 class CEOOnlyPermission(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.role == 'CEO')
+
+
+class ChatbotRolePermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role in ['ACCOUNTANT', 'MANAGER', 'CEO']
+        )
 
 
 class AnalyticsView(APIView):
@@ -18,9 +29,11 @@ class AnalyticsView(APIView):
         total_expenses = Bill.objects.aggregate(total=Sum('amount'))['total'] or 0
         categories = list(Bill.objects.values('category').annotate(total=Sum('amount')))
 
-        approved_count = Bill.objects.filter(status__in=['CEO_APPROVED', 'PAID']).count()
-        pending_count = Bill.objects.filter(status__in=['UPLOADED', 'ACCOUNTANT_VERIFIED', 'MANAGER_APPROVED']).count()
-        rejected_count = Bill.objects.filter(status__in=['MANAGER_REJECTED', 'CEO_REJECTED']).count()
+        approved_count = Bill.objects.filter(status__in=['APPROVED', 'PAID', 'CEO_APPROVED']).count()
+        pending_count = Bill.objects.filter(
+            status__in=['UPLOADED', 'ACCOUNTANT_VERIFIED', 'MANAGER_APPROVED', 'UNDER_REVIEW']
+        ).count()
+        rejected_count = Bill.objects.filter(status__in=['REJECTED', 'MANAGER_REJECTED', 'CEO_REJECTED']).count()
 
         return Response(
             {
@@ -36,24 +49,17 @@ class AnalyticsView(APIView):
 
 
 class AIAssistantView(APIView):
-    permission_classes = [CEOOnlyPermission]
+    permission_classes = [ChatbotRolePermission]
 
     def post(self, request, format=None):
         prompt = (request.data.get('prompt') or '').strip()
         if not prompt:
             return Response({'error': 'Prompt is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        total_bills = Bill.objects.count()
-        total_expenses = Bill.objects.aggregate(total=Sum('amount'))['total'] or 0
-        rejected = Bill.objects.filter(status__in=['MANAGER_REJECTED', 'CEO_REJECTED']).count()
-        top_category = (
-            Bill.objects.values('category').annotate(total=Sum('amount')).order_by('-total').first()
+        response_text = answer_chat_query(prompt=prompt, user_role=request.user.role)
+        return Response(
+            {
+                'response': response_text,
+            },
+            status=status.HTTP_200_OK,
         )
-
-        summary = (
-            f"Processed {total_bills} bills with total expenses {total_expenses}. "
-            f"Rejected bills: {rejected}. "
-            f"Top spend category: {(top_category or {}).get('category', 'N/A')}."
-        )
-
-        return Response({'response': f"{summary} You asked: {prompt}"}, status=status.HTTP_200_OK)

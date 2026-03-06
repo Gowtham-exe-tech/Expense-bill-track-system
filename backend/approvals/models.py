@@ -17,6 +17,7 @@ class Approval(models.Model):
     approval_id = models.AutoField(primary_key=True)
     bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='approvals')
     approver_role = models.CharField(max_length=50, choices=ROLE_CHOICES)
+    is_required = models.BooleanField(default=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Pending')
     comments = models.TextField(blank=True, null=True)
     approved_at = models.DateTimeField(null=True, blank=True)

@@ -1,27 +1,24 @@
-from django.utils import timezone
 from django.db.models import Q
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 
-from approvals.models import Approval
-from audit.models import AuditTrail
+from approvals.workflow import (
+    ROLE_ACCOUNTANT,
+    ROLE_CEO,
+    ROLE_MANAGER,
+    apply_decision,
+    ensure_amount_based_approvals,
+    evaluate_bill_status,
+    write_audit,
+)
+from notifications.tasks import check_due_dates_and_notify
 from utils.category_predictor import predict_category
 from utils.ocr import extract_text_from_image, parse_ocr_text
 
 from .models import Bill
 from .serializers import BillSerializer
 
-
 ROLE_RECEPTIONIST = 'RECEPTIONIST'
-ROLE_ACCOUNTANT = 'ACCOUNTANT'
-ROLE_MANAGER = 'MANAGER'
-ROLE_CEO = 'CEO'
-
-
-def ensure_workflow_approvals(bill):
-    Approval.objects.get_or_create(bill=bill, approver_role=ROLE_ACCOUNTANT, defaults={'status': 'Pending'})
-    Approval.objects.get_or_create(bill=bill, approver_role=ROLE_MANAGER, defaults={'status': 'Pending'})
-    Approval.objects.get_or_create(bill=bill, approver_role=ROLE_CEO, defaults={'status': 'Pending'})
 
 
 class BillUploadView(generics.CreateAPIView):
@@ -89,6 +86,8 @@ class BillUploadView(generics.CreateAPIView):
                 bill.amount = ocr_data.get('amount')
             if not bill.bill_date and ocr_data.get('bill_date'):
                 bill.bill_date = ocr_data.get('bill_date')
+            if bill.category == 'Other' and ocr_data.get('category') and ocr_data.get('category') != 'Other':
+                bill.category = ocr_data.get('category')
 
             predicted = predict_category(bill.vendor_name, raw_text)
             if bill.category == 'Other' and predicted != 'Other':
@@ -116,8 +115,8 @@ class BillUploadView(generics.CreateAPIView):
             )
 
         bill.save()
-        ensure_workflow_approvals(bill)
-        AuditTrail.objects.create(bill=bill, action='Bill uploaded', performed_by=request.user.username)
+        ensure_amount_based_approvals(bill)
+        write_audit(bill, 'Bill uploaded', request.user.username)
 
         payload = dict(response.data)
         payload['ocr_extracted_data'] = ocr_data
@@ -132,6 +131,10 @@ class BillListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        try:
+            check_due_dates_and_notify()
+        except Exception:
+            pass
         queryset = Bill.objects.all().order_by('-created_at')
         if self.request.user.role == ROLE_RECEPTIONIST:
             return queryset.filter(Q(uploaded_by=self.request.user) | Q(uploaded_by__isnull=True))
@@ -143,6 +146,10 @@ class BillDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        try:
+            check_due_dates_and_notify()
+        except Exception:
+            pass
         queryset = Bill.objects.all()
         if self.request.user.role == ROLE_RECEPTIONIST:
             return queryset.filter(Q(uploaded_by=self.request.user) | Q(uploaded_by__isnull=True))
@@ -157,22 +164,21 @@ class BillDetailView(generics.RetrieveUpdateAPIView):
         if response.status_code >= 400:
             return response
 
-        if bill.status == 'UPLOADED':
-            bill.status = 'ACCOUNTANT_VERIFIED'
-            bill.save(update_fields=['status'])
-
-            accountant_approval = Approval.objects.filter(bill=bill, approver_role=ROLE_ACCOUNTANT).first()
-            if accountant_approval and accountant_approval.status == 'Pending':
-                accountant_approval.status = 'Approved'
-                accountant_approval.approved_at = timezone.now()
-                accountant_approval.save(update_fields=['status', 'approved_at'])
-
-            AuditTrail.objects.create(
+        ensure_amount_based_approvals(bill)
+        try:
+            bill_status = apply_decision(
                 bill=bill,
-                action='OCR verified and bill details updated by accountant',
+                role=ROLE_ACCOUNTANT,
+                decision='approve',
+                comments='OCR verified and edited by accountant',
                 performed_by=request.user.username,
             )
+        except Exception:
+            bill.status = evaluate_bill_status(bill)
+            bill.save(update_fields=['status'])
+            bill_status = bill.status
 
+        write_audit(bill, f'OCR verified and bill details updated by accountant (status: {bill_status})', request.user.username)
         return response
 
 
@@ -186,36 +192,24 @@ class BillApproveView(generics.UpdateAPIView):
         except Bill.DoesNotExist:
             return Response({'error': 'Bill not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        user_role = request.user.role
-        if user_role == ROLE_MANAGER:
-            if bill.status != 'ACCOUNTANT_VERIFIED':
-                return Response({'error': 'Manager can approve only accountant-verified bills.'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.role not in (ROLE_ACCOUNTANT, ROLE_MANAGER, ROLE_CEO):
+            return Response({'error': 'Only accountant, manager, or CEO can approve bills.'}, status=status.HTTP_403_FORBIDDEN)
 
-            bill.status = 'MANAGER_APPROVED'
-            bill.save(update_fields=['status'])
-            approval = Approval.objects.filter(bill=bill, approver_role=ROLE_MANAGER).first()
-            if approval:
-                approval.status = 'Approved'
-                approval.approved_at = timezone.now()
-                approval.save(update_fields=['status', 'approved_at'])
-            AuditTrail.objects.create(bill=bill, action='Manager approved bill', performed_by=request.user.username)
-            return Response({'status': 'approved', 'bill_status': bill.status})
+        ensure_amount_based_approvals(bill)
+        try:
+            bill_status = apply_decision(
+                bill=bill,
+                role=request.user.role,
+                decision='approve',
+                comments=request.data.get('comments', ''),
+                performed_by=request.user.username,
+            )
+        except PermissionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if user_role == ROLE_CEO:
-            if bill.status != 'MANAGER_APPROVED':
-                return Response({'error': 'CEO can approve only manager-approved bills.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            bill.status = 'CEO_APPROVED'
-            bill.save(update_fields=['status'])
-            approval = Approval.objects.filter(bill=bill, approver_role=ROLE_CEO).first()
-            if approval:
-                approval.status = 'Approved'
-                approval.approved_at = timezone.now()
-                approval.save(update_fields=['status', 'approved_at'])
-            AuditTrail.objects.create(bill=bill, action='CEO approved bill', performed_by=request.user.username)
-            return Response({'status': 'approved', 'bill_status': bill.status})
-
-        return Response({'error': 'Only manager or CEO can approve bills.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'status': 'approved', 'bill_status': bill_status})
 
 
 class BillRejectView(generics.UpdateAPIView):
@@ -228,34 +222,24 @@ class BillRejectView(generics.UpdateAPIView):
         except Bill.DoesNotExist:
             return Response({'error': 'Bill not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        comments = request.data.get('comments', '')
-        user_role = request.user.role
+        if request.user.role not in (ROLE_ACCOUNTANT, ROLE_MANAGER, ROLE_CEO):
+            return Response({'error': 'Only accountant, manager, or CEO can reject bills.'}, status=status.HTTP_403_FORBIDDEN)
 
-        if user_role == ROLE_MANAGER:
-            if bill.status != 'ACCOUNTANT_VERIFIED':
-                return Response({'error': 'Manager can reject only accountant-verified bills.'}, status=status.HTTP_400_BAD_REQUEST)
-            bill.status = 'MANAGER_REJECTED'
-            target_role = ROLE_MANAGER
-            action = 'Manager rejected bill'
-        elif user_role == ROLE_CEO:
-            if bill.status != 'MANAGER_APPROVED':
-                return Response({'error': 'CEO can reject only manager-approved bills.'}, status=status.HTTP_400_BAD_REQUEST)
-            bill.status = 'CEO_REJECTED'
-            target_role = ROLE_CEO
-            action = 'CEO rejected bill'
-        else:
-            return Response({'error': 'Only manager or CEO can reject bills.'}, status=status.HTTP_403_FORBIDDEN)
+        ensure_amount_based_approvals(bill)
+        try:
+            bill_status = apply_decision(
+                bill=bill,
+                role=request.user.role,
+                decision='reject',
+                comments=request.data.get('comments', ''),
+                performed_by=request.user.username,
+            )
+        except PermissionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        bill.save(update_fields=['status'])
-        approval = Approval.objects.filter(bill=bill, approver_role=target_role).first()
-        if approval:
-            approval.status = 'Rejected'
-            approval.comments = comments
-            approval.approved_at = timezone.now()
-            approval.save(update_fields=['status', 'comments', 'approved_at'])
-
-        AuditTrail.objects.create(bill=bill, action=action, performed_by=request.user.username)
-        return Response({'status': 'rejected', 'bill_status': bill.status})
+        return Response({'status': 'rejected', 'bill_status': bill_status})
 
 
 class BillMarkPaidView(generics.UpdateAPIView):
@@ -271,10 +255,10 @@ class BillMarkPaidView(generics.UpdateAPIView):
         except Bill.DoesNotExist:
             return Response({'error': 'Bill not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        if bill.status != 'CEO_APPROVED':
-            return Response({'error': 'Only CEO-approved bills can be marked as paid.'}, status=status.HTTP_400_BAD_REQUEST)
+        if bill.status not in ('APPROVED', 'CEO_APPROVED'):
+            return Response({'error': 'Only approved bills can be marked as paid.'}, status=status.HTTP_400_BAD_REQUEST)
 
         bill.status = 'PAID'
         bill.save(update_fields=['status'])
-        AuditTrail.objects.create(bill=bill, action='Bill marked as paid', performed_by=request.user.username)
+        write_audit(bill, 'Bill marked as paid', request.user.username)
         return Response({'status': 'paid', 'bill_status': bill.status})
